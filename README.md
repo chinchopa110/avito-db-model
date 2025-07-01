@@ -1,366 +1,181 @@
-# Avito
+# PostgreSQL Deployment with Docker
 
-## Описание функциональных требований
+## Project Overview
 
-Система предоставляет следующие возможности: 
+This project provides a complete production-ready PostgreSQL environment with:
+- Database migrations
+- Test data seeding
+- Monitoring and visualization
+- High availability
+- Automated backups
+- Performance optimization
 
-### Управление учетной записью
+## Detailed Features
 
-•   **Регистрация пользователей:** Создание профиля с основной информацией.  
-•   **Авторизация:** Безопасный вход в систему с использованием логина и пароля или других методов аутентификации.  
-•   **Восстановление доступа:** Процесс восстановления забытого пароля через подтверждение личности.  
-•   **Управление профилем:** Редактирование личной информации, контактных данных и настроек уведомлений.  
+### 1. Database Migrations (Flyway)
+- Version-controlled SQL migrations
+- Automatic migration on container startup
+- Supports partial upgrades (MIGRATION_VERSION)
+- Idempotent migration scripts
+- Schema version tracking
 
-### Публикация и редактирование объявлений
+Migration files are stored in:
+/migrations/
+  V1__Initial_schema.sql
+  V2__Add_indexes.sql
+  V3__Create_roles.sql
+  V4__Partition_tables.sql
 
-•   **Создание объявлений о товарах:** Пользователь может размещать объявлений о товарах.  
-•   **Создание объявлений об услугах:** Пользователь может размещать объявлений об услугах.  
-•   **Создание объявлений о вакансиях:** Пользователь может размещать объявлений о вакансиях.  
-•   **Создание объявлений о недвижимости :** Пользователь может размещать объявлений о недвижимости.    
-•   **Редактирование объявлений:** Изменение опубликованных объявлений для актуализации информации и добавления новых деталей.  
-•   **Удаление объявлений:** Снятие объявлений с публикации.  
+### 2. Data Seeding System
+- Uses Python + Faker for realistic test data
+- Controlled by environment variables:
+  - APP_ENV=dev (enables seeding)
+  - SEED_COUNT=1000 (records per table)
+- Maintains data consistency across relationships
+- Supports all migration versions
 
-### Поиск и просмотр объявлений
+Seeding process:
+1. Waits for database readiness
+2. Checks current schema version
+3. Generates appropriate test data
+4. Validates data integrity
 
-•   **Поиск по ключевым словам:** Поиск объявлений по названию, описанию и другим релевантным атрибутам.  
-•   **Фильтрация по параметрам:** Фильтрация результатов поиска по цене, дате, местоположению, категории и другим критериям.  
-•   **Сортировка результатов:** Сортировка объявлений по популярности, цене, дате и другим параметрам.  
-•   **Просмотр объявлений:** Отображение подробной информации об объявлении, включая описание, фотографии, контактные данные продавца/поставщика услуг.  
-•   **Карта объявлений:** Отображение объявлений на карте с указанием местоположения.  
+### 3. High Availability (Patroni)
+- 3-node PostgreSQL cluster:
+  - 1 primary (read-write)
+  - 2 synchronous replicas (read-only)
+- Automatic failover
+- Configuration:
+  /patroni/config.yml
+  - etcd for leader election
+  - health checks every 10s
+  - failover timeout: 30s
 
-### Взаимодействие между пользователями
+### 4. Performance Optimization
+#### Indexes
+- B-tree for standard queries
+- GIN for JSONB columns
+- Partial indexes for common filters
+- Covering indexes for critical queries
 
-•   **Обмен сообщениями:** Отправка и получение личных сообщений для обсуждения деталей объявлений.  
-•   **Отзывы:** Возможность оставлять отзывы для других пользователей.  
-•   **Рейтинги:** Возможность оценить продавца.  
-•   **Жалобы на объявления:** Механизм для сообщения о подозрительных или нарушающих правила объявлениях.  
-•   **Блокировка пользователей:** Возможность заблокировать пользователя для предотвращения дальнейшего взаимодействия.  
+#### Partitioning
+- Range partitioning for time-series data
+- List partitioning for categorical data
+- Subpartitioning for complex datasets
 
-### Безопасность и модерация
+Example partitioning scheme:
+CREATE TABLE measurements (
+  id SERIAL,
+  logdate DATE NOT NULL,
+  device_id INT,
+  data JSONB
+) PARTITION BY RANGE (logdate);
 
-•   **Модерация объявлений:** Проверка объявлений на соответствие правилам платформы.  
-•   **Фильтрация спама:** Механизмы для автоматического и ручного(жалоба) выявления и удаления спама.  
-•   **Защита от мошенничества:** Механизмы для автоматического и ручного(жалоба) выявления и удаления мошеннических объявлений.  
-•   **Безопасная сделка:** Приложение предоставляет сервис безопасной сделки для защиты прав покупателей и продавцов.   
+#### Materialized Views
+- Pre-computed aggregates
+- Refresh on schedule
+- Automatic refresh triggers
 
-### Служба поддержки
-•   **Телефонная поддержка:** Возможность обратится в центр поддержки по телефону.  
-•   **Чат поддержки:** Онлайн чат со службой поддержки.  
+### 5. Monitoring Stack
+Components:
+- Prometheus: metrics collection
+- Grafana: visualization
+- pg_exporter: PostgreSQL metrics
 
-### Уведомления
-•   **Уведомления о новых сообщениях:** Уведомления о новых сообщениях от других пользователей.  
-•   **Уведомления об изменениях статуса объявления:** Уведомления об изменениях статуса объявления.  
-•   **Отключить уведомления:** Отключает все уведомления.  
-•   **Фильтр уведомлений:** Возможность настроить приходящие уведомления.  
+Key metrics tracked:
+- Query performance
+- Replication lag
+- Cache hit ratio
+- Locks and conflicts
+- Connection pool stats
 
+### 6. Backup System
+- WAL archiving for point-in-time recovery
+- Base backups every 24 hours
+- Retention policy (default 7 backups)
+- Backup verification
 
-### Аналитика и отчетность
-•   **Статистика просмотров объявлений:** Предоставление пользователям статистики просмотров их объявлений.      
-•   **Анализ поведения пользователей:** Отдел аналитиков собирает информацию о поведениях пользователей на платформе для улучшения работы.  
+Backup commands:
+# Manual base backup
+docker-compose exec postgres pg_basebackup -D /backups/full_$(date +%Y-%m-%d)
 
-```plantuml
-' Сущности пользователей и аутентификации
-entity User {
-  * user_id: INT <<PK>>
-  --
-  * username: VARCHAR(50)
-  * email: VARCHAR(100) <<UNIQUE>>
-  * phone: VARCHAR(20) <<UNIQUE>>
-  * password_hash: VARCHAR(255)
-  * registration_date: DATETIME
-  last_login: DATETIME
-  is_active: BOOLEAN
-  is_blocked: BOOLEAN
-}
+# Restore from backup
+docker-compose exec postgres pg_restore -C -d postgres /backups/latest.dump
 
-entity UserProfile {
-  * profile_id: INT <<PK>>
-  * user_id: INT <<FK>>
-  --
-  first_name: VARCHAR(50)
-  last_name: VARCHAR(50)
-  avatar_url: VARCHAR(255)
-  about: TEXT
-  rating: DECIMAL(3,2)
-}
+## Detailed Setup Guide
 
-entity PasswordReset {
-  * reset_id: INT <<PK>>
-  * user_id: INT <<FK>>
-  --
-  token: VARCHAR(255)
-  expiration_date: DATETIME
-  is_used: BOOLEAN
-}
+### Prerequisites
+- Docker 20.10+
+- Docker Compose 2.0+
+- 4GB+ RAM recommended
 
-' Сущности объявлений
-entity Advertisement {
-  * ad_id: INT <<PK>>
-  * user_id: INT <<FK>>
-  * category_id: INT <<FK>>
-  * location_id: INT <<FK>>
-  * status_id: INT <<FK>>
-  --
-  * title: VARCHAR(100)
-  * description: TEXT
-  * price: DECIMAL(12,2)
-  * creation_date: DATETIME
-  modification_date: DATETIME
-  views_count: INT
-}
+### Installation Steps
+1. Clone repository:
+git clone https://github.com/chinchopa110/postgres-docker-setup.git
 
-entity AdCategory {
-  * category_id: INT <<PK>>
-  * parent_id: INT <<FK>>
-  --
-  * name: VARCHAR(50)
-  description: TEXT
-}
+2. Configure environment:
+cp .env.example .env
+nano .env
 
-entity AdStatus {
-  * status_id: INT <<PK>>
-  --
-  * name: VARCHAR(20)
-  description: TEXT
-}
+3. Start services:
+docker-compose up -d
 
-entity AdType {
-  * type_id: INT <<PK>>
-  --
-  * name: VARCHAR(20)
-}
+4. Verify:
+docker-compose ps
 
-entity AdPhoto {
-  * photo_id: INT <<PK>>
-  * ad_id: INT <<FK>>
-  --
-  * photo_url: VARCHAR(255)
-  is_main: BOOLEAN
-  upload_date: DATETIME
-}
+### Configuration Options
 
-' Специализированные типы объявлений(для type_id)
-entity ProductAd {
-  * ad_id: INT <<PK>> <<FK>>
-  --
-  brand: VARCHAR(50)
-  model: VARCHAR(50)
-  condition: VARCHAR(20)
-  warranty: BOOLEAN
-}
+#### Database
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=secure_password
+POSTGRES_DB=app_db
+MAX_CONNECTIONS=100
+SHARED_BUFFERS=1GB
 
-entity ServiceAd {
-  * ad_id: INT <<PK>> <<FK>>
-  --
-  service_type: VARCHAR(50)
-  experience: VARCHAR(50)
-  availability: VARCHAR(50)
-}
+#### Replication
+PATRONI_REPLICATION_USERNAME=replicator
+PATRONI_REPLICATION_PASSWORD=replica_pass
+PATRONI_POSTGRESQL_LISTEN=0.0.0.0:5432
+PATRONI_POSTGRESQL_CONNECT_ADDRESS=postgres:5432
 
-entity JobAd {
-  * ad_id: INT <<PK>> <<FK>>
-  --
-  position: VARCHAR(100)
-  employment_type: VARCHAR(50)
-  experience_required: VARCHAR(50)
-  salary_from: DECIMAL(12,2)
-  salary_to: DECIMAL(12,2)
-}
+#### Monitoring
+GF_SECURITY_ADMIN_USER=admin
+GF_SECURITY_ADMIN_PASSWORD=admin123
+PROMETHEUS_RETENTION=15d
 
-entity RealEstateAd {
-  * ad_id: INT <<PK>> <<FK>>
-  --
-  property_type: VARCHAR(50)
-  area: DECIMAL(10,2)
-  rooms: INT
-  floor: INT
-  total_floors: INT
-}
+## Maintenance
 
-' Локации
-entity Location {
-  * location_id: INT <<PK>>
-  * parent_id: INT <<FK>>
-  --
-  * name: VARCHAR(100)
-  type: VARCHAR(20)
-  coordinates: POINT
-}
+### Common Operations
+# Check cluster status
+docker-compose exec patroni patronictl list
 
-' Взаимодействия
-entity Message {
-  * message_id: INT <<PK>>
-  * sender_id: INT <<FK>>
-  * recipient_id: INT <<FK>>
-  * conversation_id: INT <<FK>>
-  --
-  * content: TEXT
-  * send_date: DATETIME
-  is_read: BOOLEAN
-}
+# Promote replica
+docker-compose exec patroni patronictl failover
 
-entity Conversation {
-  * conversation_id: INT <<PK>>
-  * ad_id: INT <<FK>>
-  --
-  start_date: DATETIME
-  last_message_date: DATETIME
-}
+# Rebuild indexes
+docker-compose exec postgres psql -U $POSTGRES_USER -c "REINDEX DATABASE $POSTGRES_DB;"
 
-entity Review {
-  * review_id: INT <<PK>>
-  * reviewer_id: INT <<FK>>
-  * reviewed_user_id: INT <<FK>>
-  * ad_id: INT <<FK>>
-  --
-  * rating: INT
-  comment: TEXT
-  creation_date: DATETIME
-}
+### Troubleshooting
+1. Replication issues:
+- Check patroni logs: docker-compose logs patroni
+- Verify etcd health: docker-compose exec etcd etcdctl cluster-health
 
-entity Complaint {
-  * complaint_id: INT <<PK>>
-  * reporter_id: INT <<FK>>
-  * ad_id: INT <<FK>>
-  * complaint_type_id: INT <<FK>>
-  --
-  description: TEXT
-  status: VARCHAR(20)
-  creation_date: DATETIME
-  resolution_date: DATETIME
-}
+2. Performance problems:
+- Examine slow queries: docker-compose exec postgres psql -U $POSTGRES_USER -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
+- Check locks: docker-compose exec postgres psql -U $POSTGRES_USER -c "SELECT * FROM pg_locks;"
 
-entity ComplaintType {
-  * type_id: INT <<PK>>
-  --
-  * name: VARCHAR(50)
-  description: TEXT
-}
+## Security
 
-' Безопасные сделки
-entity SafeDeal {
-  * deal_id: INT <<PK>>
-  * buyer_id: INT <<FK>>
-  * seller_id: INT <<FK>>
-  * ad_id: INT <<FK>>
-  --
-  amount: DECIMAL(12,2)
-  status: VARCHAR(20)
-  creation_date: DATETIME
-  completion_date: DATETIME
-}
+### Role Management
+- Application roles with least privilege
+- Read-only analytic role
+- Password encryption
+- Connection limits
 
-' Уведомления
-entity Notification {
-  * notification_id: INT <<PK>>
-  * user_id: INT <<FK>>
-  * notification_type_id: INT <<FK>>
-  --
-  content: TEXT
-  is_read: BOOLEAN
-  creation_date: DATETIME
-  related_entity_id: INT
-  related_entity_type: VARCHAR(50)
-}
-
-entity NotificationType {
-  * type_id: INT <<PK>>
-  --
-  * name: VARCHAR(50)
-  template: TEXT
-}
-
-entity NotificationSettings {
-  * settings_id: INT <<PK>>
-  * user_id: INT <<FK>>
-  --
-  email_notifications: BOOLEAN
-  push_notifications: BOOLEAN
-  sms_notifications: BOOLEAN
-}
-
-' Поддержка
-entity SupportTicket {
-  * ticket_id: INT <<PK>>
-  * user_id: INT <<FK>>
-  * ticket_type_id: INT <<FK>>
-  --
-  subject: VARCHAR(100)
-  description: TEXT
-  status: VARCHAR(20)
-  creation_date: DATETIME
-  resolution_date: DATETIME
-}
-
-entity SupportTicketType {
-  * type_id: INT <<PK>>
-  --
-  * name: VARCHAR(50)
-  description: TEXT
-}
-
-' Аналитика
-entity AdStatistic {
-  * stat_id: INT <<PK>>
-  * ad_id: INT <<FK>>
-  --
-  date: DATE
-  views: INT
-  contacts: INT
-  favorites: INT
-}
-
-entity UserActivity {
-  * activity_id: INT <<PK>>
-  * user_id: INT <<FK>>
-  --
-  date: DATE
-  ads_viewed: INT
-  ads_created: INT
-  messages_sent: INT
-  searches_performed: INT
-}
-
-' Связи
-User ||--o{ UserProfile
-User ||--o{ PasswordReset
-User ||--o{ Advertisement
-User ||--o{ Message as sender
-User ||--o{ Message as recipient
-User ||--o{ Review as reviewer
-User ||--o{ Review as reviewed_user
-User ||--o{ Complaint
-User ||--o{ SafeDeal as buyer
-User ||--o{ SafeDeal as seller
-User ||--o{ Notification
-User ||--o{ NotificationSettings
-User ||--o{ SupportTicket
-User ||--o{ UserActivity
-
-Advertisement }|--|| AdCategory
-Advertisement }|--|| AdStatus
-Advertisement }|--|| Location
-Advertisement }|--|| AdType
-Advertisement ||--o{ AdPhoto
-Advertisement ||--o| ProductAd
-Advertisement ||--o| ServiceAd
-Advertisement ||--o| JobAd
-Advertisement ||--o| RealEstateAd
-Advertisement ||--o{ Message
-Advertisement ||--o{ Review
-Advertisement ||--o{ Complaint
-Advertisement ||--o{ SafeDeal
-Advertisement ||--o{ AdStatistic
-
-AdCategory }|--o{ AdCategory
-
-Location }|--o{ Location
-
-Conversation ||--o{ Message
-
-Complaint }|--|| ComplaintType
-
-Notification }|--|| NotificationType
-
-SupportTicket }|--|| SupportTicketType
-```
+### Network Security
+- Internal Docker network
+- Exposed ports limited to:
+  - 5432 (PostgreSQL)
+  - 3000 (Grafana)
+  - 9090 (Prometheus)
+- TLS encryption for replication
